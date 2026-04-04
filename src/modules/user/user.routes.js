@@ -8,12 +8,14 @@ const {
   updateUserStatus,
   deleteUser,
 } = require("./user.controller");
+const { authenticate } = require("../../middlewares/auth.middleware");
+const { authorize } = require("../../middlewares/rbac.middleware");
 
-router.post("/", createUser);
-router.get("/", getAllUsers);
-router.get("/:id", getUserById);
-router.patch("/:id/role", updateUserRole);
-router.patch("/:id/status", updateUserStatus);
-router.delete("/:id", deleteUser);
+router.post("/", authenticate, authorize("admin"), createUser);
+router.get("/", authenticate, authorize("admin", "analyst"), getAllUsers);
+router.get("/:id", authenticate, authorize("admin", "analyst"), getUserById);
+router.patch("/:id/role", authenticate, authorize("admin"), updateUserRole);
+router.patch("/:id/status", authenticate, authorize("admin"), updateUserStatus);
+router.delete("/:id", authenticate, authorize("admin"), deleteUser);
 
 module.exports = router;

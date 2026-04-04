@@ -1,5 +1,6 @@
 const express = require("express");
 const userRoutes = require("./modules/user/user.routes");
+const authRoutes = require("./modules/auth/auth.routes");
 
 const app = express();
 
@@ -10,6 +11,7 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", message: "Finance API is running" });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
 module.exports = app;

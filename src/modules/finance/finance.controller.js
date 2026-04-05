@@ -1,147 +1,101 @@
 const mongoose = require("mongoose");
 const Finance = require("./finance.model");
-const { sendSuccess, sendError } = require("../../utils/response");
+const { sendSuccess } = require("../../utils/response");
+const AppError = require("../../utils/AppError");
+const asyncHandler = require("../../utils/asyncHandler");
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-exports.createRecord = async (req, res) => {
-  try {
-    const { amount, type, category, date, notes } = req.body;
+exports.createRecord = asyncHandler(async (req, res) => {
+  const { amount, type, category, date, notes } = req.body;
 
-    if (!amount || !type || !category || !date) {
-      return sendError(res, "amount, type, category, and date are required", 400);
-    }
+  const record = await Finance.create({
+    amount,
+    type,
+    category,
+    date,
+    notes,
+    createdBy: req.user.id,
+  });
 
-    if (amount <= 0) {
-      return sendError(res, "amount must be greater than 0", 400);
-    }
+  console.log(`createRecord: ${type} of ${amount} in category "${category}" by user ${req.user.id}`);
 
-    const record = await Finance.create({
-      amount,
-      type,
-      category,
-      date,
-      notes,
-      createdBy: req.user.id,
-    });
+  return sendSuccess(res, record, "Financial record created successfully", 201);
+});
 
-    console.log(`createRecord: ${type} of ${amount} in category "${category}" by user ${req.user.id}`);
+exports.getAllRecords = asyncHandler(async (req, res) => {
+  const { type, category, startDate, endDate, page = 1, limit = 10 } = req.query;
 
-    return sendSuccess(res, record, "Financial record created successfully", 201);
-  } catch (error) {
-    console.error(`createRecord error: ${error.message}`);
-    return sendError(res, "Failed to create financial record");
+  const filter = {};
+
+  if (type) filter.type = type;
+  if (category) filter.category = category;
+  if (startDate || endDate) {
+    filter.date = {};
+    if (startDate) filter.date.$gte = new Date(startDate);
+    if (endDate) filter.date.$lte = new Date(endDate);
   }
-};
 
-exports.getAllRecords = async (req, res) => {
-  try {
-    const { type, category, startDate, endDate, page = 1, limit = 10 } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
 
-    const filter = {};
+  const [records, total] = await Promise.all([
+    Finance.find(filter)
+      .populate("createdBy", "name email")
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    Finance.countDocuments(filter),
+  ]);
 
-    if (type) filter.type = type;
-    if (category) filter.category = category;
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
-    }
+  console.log(`getAllRecords: returned ${records.length} of ${total} records`);
 
-    const skip = (Number(page) - 1) * Number(limit);
+  return sendSuccess(res, {
+    records,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit)),
+    },
+  }, "Records fetched successfully");
+});
 
-    const [records, total] = await Promise.all([
-      Finance.find(filter)
-        .populate("createdBy", "name email")
-        .sort({ date: -1 })
-        .skip(skip)
-        .limit(Number(limit)),
-      Finance.countDocuments(filter),
-    ]);
+exports.getRecordById = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid record ID format", 400);
 
-    console.log(`getAllRecords: returned ${records.length} of ${total} records`);
+  const record = await Finance.findById(req.params.id).populate("createdBy", "name email");
+  if (!record) throw new AppError("Record not found", 404);
 
-    return sendSuccess(res, {
-      records,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / Number(limit)),
-      },
-    }, "Records fetched successfully");
-  } catch (error) {
-    console.error(`getAllRecords error: ${error.message}`);
-    return sendError(res, "Failed to fetch records");
-  }
-};
+  console.log(`getRecordById: fetched record ${record._id}`);
 
-exports.getRecordById = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
+  return sendSuccess(res, record, "Record fetched successfully");
+});
 
-    const record = await Finance.findById(req.params.id).populate("createdBy", "name email");
+exports.updateRecord = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid record ID format", 400);
 
-    if (!record) {
-      return sendError(res, "Record not found", 404);
-    }
+  const { amount, type, category, date, notes } = req.body;
 
-    console.log(`getRecordById: fetched record ${record._id}`);
+  const record = await Finance.findByIdAndUpdate(
+    req.params.id,
+    { amount, type, category, date, notes },
+    { new: true, runValidators: true }
+  );
 
-    return sendSuccess(res, record, "Record fetched successfully");
-  } catch (error) {
-    console.error(`getRecordById error: ${error.message}`);
-    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
-    return sendError(res, "Failed to fetch record");
-  }
-};
+  if (!record) throw new AppError("Record not found", 404);
 
-exports.updateRecord = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
+  console.log(`updateRecord: record ${record._id} updated by user ${req.user.id}`);
 
-    const { amount, type, category, date, notes } = req.body;
+  return sendSuccess(res, record, "Record updated successfully");
+});
 
-    if (amount !== undefined && amount <= 0) {
-      return sendError(res, "amount must be greater than 0", 400);
-    }
+exports.deleteRecord = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid record ID format", 400);
 
-    const record = await Finance.findByIdAndUpdate(
-      req.params.id,
-      { amount, type, category, date, notes },
-      { new: true, runValidators: true }
-    );
+  const record = await Finance.findByIdAndDelete(req.params.id);
+  if (!record) throw new AppError("Record not found", 404);
 
-    if (!record) {
-      return sendError(res, "Record not found", 404);
-    }
+  console.log(`deleteRecord: record ${record._id} deleted by user ${req.user.id}`);
 
-    console.log(`updateRecord: record ${record._id} updated by user ${req.user.id}`);
-
-    return sendSuccess(res, record, "Record updated successfully");
-  } catch (error) {
-    console.error(`updateRecord error: ${error.message}`);
-    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
-    return sendError(res, "Failed to update record");
-  }
-};
-
-exports.deleteRecord = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
-
-    const record = await Finance.findByIdAndDelete(req.params.id);
-
-    if (!record) {
-      return sendError(res, "Record not found", 404);
-    }
-
-    console.log(`deleteRecord: record ${record._id} deleted by user ${req.user.id}`);
-
-    return sendSuccess(res, null, "Record deleted successfully");
-  } catch (error) {
-    console.error(`deleteRecord error: ${error.message}`);
-    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
-    return sendError(res, "Failed to delete record");
-  }
-};
+  return sendSuccess(res, null, "Record deleted successfully");
+});

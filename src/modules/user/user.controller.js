@@ -1,136 +1,92 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("./user.model");
-const { sendSuccess, sendError } = require("../../utils/response");
+const { sendSuccess } = require("../../utils/response");
+const AppError = require("../../utils/AppError");
+const asyncHandler = require("../../utils/asyncHandler");
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-exports.createUser = async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
+exports.createUser = asyncHandler(async (req, res) => {
+  const { name, email, password, role } = req.body;
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return sendError(res, "A user with this email already exists", 409);
-    }
+  const existing = await User.findOne({ email });
+  if (existing) throw new AppError("A user with this email already exists", 409);
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hashedPassword, role });
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = await User.create({ name, email, password: hashedPassword, role });
 
-    console.log(`createUser: ${user.email} | role: ${user.role}`);
+  console.log(`createUser: ${user.email} | role: ${user.role}`);
 
-    const userObj = user.toObject();
-    delete userObj.password;
+  const userObj = user.toObject();
+  delete userObj.password;
 
-    return sendSuccess(res, userObj, "User created successfully", 201);
-  } catch (error) {
-    console.error(`createUser error: ${error.message}`);
-    return sendError(res, "Failed to create user");
-  }
-};
+  return sendSuccess(res, userObj, "User created successfully", 201);
+});
 
-exports.getAllUsers = async (req, res) => {
-  try {
-    const filter = {};
+exports.getAllUsers = asyncHandler(async (req, res) => {
+  const filter = {};
 
-    if (req.query.role) filter.role = req.query.role;
-    if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === "true";
+  if (req.query.role) filter.role = req.query.role;
+  if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === "true";
 
-    const users = await User.find(filter).select("-password");
+  const users = await User.find(filter).select("-password");
 
-    console.log(`getAllUsers: returned ${users.length} users`);
+  console.log(`getAllUsers: returned ${users.length} users`);
 
-    return sendSuccess(res, users, "Users fetched successfully");
-  } catch (error) {
-    console.error(`getAllUsers error: ${error.message}`);
-    return sendError(res, "Failed to fetch users");
-  }
-};
+  return sendSuccess(res, users, "Users fetched successfully");
+});
 
-exports.getUserById = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
+exports.getUserById = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid user ID format", 400);
 
-    const user = await User.findById(req.params.id).select("-password");
+  const user = await User.findById(req.params.id).select("-password");
+  if (!user) throw new AppError("User not found", 404);
 
-    if (!user) {
-      return sendError(res, "User not found", 404);
-    }
+  console.log(`getUserById: fetched user ${user.email}`);
 
-    console.log(`getUserById: fetched user ${user.email}`);
+  return sendSuccess(res, user, "User fetched successfully");
+});
 
-    return sendSuccess(res, user, "User fetched successfully");
-  } catch (error) {
-    console.error(`getUserById error: ${error.message}`);
-    return sendError(res, "Failed to fetch user");
-  }
-};
+exports.updateUserRole = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid user ID format", 400);
 
-exports.updateUserRole = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { role: req.body.role },
+    { new: true }
+  ).select("-password");
 
-    const { role } = req.body;
+  if (!user) throw new AppError("User not found", 404);
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { role },
-      { new: true }
-    ).select("-password");
+  console.log(`updateUserRole: ${user.email} role set to ${user.role}`);
 
-    if (!user) {
-      return sendError(res, "User not found", 404);
-    }
+  return sendSuccess(res, user, "User role updated successfully");
+});
 
-    console.log(`updateUserRole: ${user.email} role set to ${user.role}`);
+exports.updateUserStatus = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid user ID format", 400);
 
-    return sendSuccess(res, user, "User role updated successfully");
-  } catch (error) {
-    console.error(`updateUserRole error: ${error.message}`);
-    return sendError(res, "Failed to update user role");
-  }
-};
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { isActive: req.body.isActive },
+    { new: true }
+  ).select("-password");
 
-exports.updateUserStatus = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
+  if (!user) throw new AppError("User not found", 404);
 
-    const { isActive } = req.body;
+  console.log(`updateUserStatus: ${user.email} isActive set to ${user.isActive}`);
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isActive },
-      { new: true }
-    ).select("-password");
+  return sendSuccess(res, user, "User status updated successfully");
+});
 
-    if (!user) {
-      return sendError(res, "User not found", 404);
-    }
+exports.deleteUser = asyncHandler(async (req, res) => {
+  if (!isValidId(req.params.id)) throw new AppError("Invalid user ID format", 400);
 
-    console.log(`updateUserStatus: ${user.email} isActive set to ${user.isActive}`);
+  const user = await User.findByIdAndDelete(req.params.id);
+  if (!user) throw new AppError("User not found", 404);
 
-    return sendSuccess(res, user, "User status updated successfully");
-  } catch (error) {
-    console.error(`updateUserStatus error: ${error.message}`);
-    return sendError(res, "Failed to update user status");
-  }
-};
+  console.log(`deleteUser: ${user.email} deleted`);
 
-exports.deleteUser = async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
-
-    const user = await User.findByIdAndDelete(req.params.id);
-
-    if (!user) {
-      return sendError(res, "User not found", 404);
-    }
-
-    console.log(`deleteUser: ${user.email} deleted`);
-
-    return sendSuccess(res, null, "User deleted successfully");
-  } catch (error) {
-    console.error(`deleteUser error: ${error.message}`);
-    return sendError(res, "Failed to delete user");
-  }
-};
+  return sendSuccess(res, null, "User deleted successfully");
+});

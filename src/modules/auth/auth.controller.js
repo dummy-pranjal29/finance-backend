@@ -1,7 +1,9 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../user/user.model");
-const { sendSuccess, sendError } = require("../../utils/response");
+const { sendSuccess } = require("../../utils/response");
+const AppError = require("../../utils/AppError");
+const asyncHandler = require("../../utils/asyncHandler");
 const config = require("../../config/index");
 
 const generateToken = (user) => {
@@ -12,79 +14,46 @@ const generateToken = (user) => {
   );
 };
 
-exports.register = async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
+exports.register = asyncHandler(async (req, res) => {
+  const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
-      return sendError(res, "name, email, and password are required", 400);
-    }
+  const existing = await User.findOne({ email });
+  if (existing) throw new AppError("A user with this email already exists", 409);
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return sendError(res, "A user with this email already exists", 409);
-    }
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = await User.create({ name, email, password: hashedPassword });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hashedPassword });
+  const token = generateToken(user);
 
-    const token = generateToken(user);
+  console.log(`Register: new user ${user.email} | role: ${user.role}`);
 
-    console.log(`Register: new user ${user.email} | role: ${user.role}`);
+  return sendSuccess(res, { token }, "Registration successful", 201);
+});
 
-    return sendSuccess(res, { token }, "Registration successful", 201);
-  } catch (error) {
-    console.error(`register error: ${error.message}`);
-    return sendError(res, "Registration failed");
-  }
-};
+exports.login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
 
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) throw new AppError("Invalid credentials", 401);
 
-    if (!email || !password) {
-      return sendError(res, "email and password are required", 400);
-    }
+  if (!user.isActive) throw new AppError("Account is deactivated", 403);
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return sendError(res, "Invalid credentials", 401);
-    }
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) throw new AppError("Invalid credentials", 401);
 
-    if (!user.isActive) {
-      return sendError(res, "Account is deactivated", 403);
-    }
+  const token = generateToken(user);
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return sendError(res, "Invalid credentials", 401);
-    }
+  console.log(`Login: ${user.email} authenticated | role: ${user.role}`);
 
-    const token = generateToken(user);
+  return sendSuccess(res, { token }, "Login successful");
+});
 
-    console.log(`Login: ${user.email} authenticated | role: ${user.role}`);
+exports.getMe = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user.id).select("-password");
 
-    return sendSuccess(res, { token }, "Login successful");
-  } catch (error) {
-    console.error(`login error: ${error.message}`);
-    return sendError(res, "Login failed");
-  }
-};
+  if (!user) throw new AppError("User not found", 404);
 
-exports.getMe = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select("-password");
+  console.log(`getMe: ${user.email} fetched their profile`);
 
-    if (!user) {
-      return sendError(res, "User not found", 404);
-    }
-
-    console.log(`getMe: ${user.email} fetched their profile`);
-
-    return sendSuccess(res, user, "Profile fetched successfully");
-  } catch (error) {
-    console.error(`getMe error: ${error.message}`);
-    return sendError(res, "Failed to fetch profile");
-  }
-};
+  return sendSuccess(res, user, "Profile fetched successfully");
+});

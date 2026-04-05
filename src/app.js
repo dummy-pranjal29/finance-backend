@@ -41,10 +41,11 @@ app.use((err, _req, res, _next) => {
     return res.status(409).json({ success: false, message: "Duplicate entry. Resource already exists." });
   }
 
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal server error",
-  });
+  if (err.isOperational) {
+    return res.status(err.statusCode).json({ success: false, message: err.message });
+  }
+
+  res.status(500).json({ success: false, message: "Internal server error" });
 });
 
 module.exports = app;

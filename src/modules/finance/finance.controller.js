@@ -31,30 +31,56 @@ exports.createRecord = asyncHandler(async (req, res) => {
 });
 
 exports.getAllRecords = asyncHandler(async (req, res) => {
-  const { type, category, startDate, endDate, page = 1, limit = 10 } = req.query;
+  const {
+    type, category, startDate, endDate,
+    minAmount, maxAmount, search, createdBy,
+    sortBy = "date", sortOrder = "desc",
+    page = 1, limit = 10,
+  } = req.query;
 
   const filter = {};
 
   if (type) filter.type = type;
-  if (category) filter.category = category;
+
+  if (category) filter.category = { $regex: category, $options: "i" };
+
   if (startDate || endDate) {
     filter.date = {};
     if (startDate) filter.date.$gte = new Date(startDate);
     if (endDate) filter.date.$lte = new Date(endDate);
   }
 
+  if (minAmount || maxAmount) {
+    filter.amount = {};
+    if (minAmount) filter.amount.$gte = Number(minAmount);
+    if (maxAmount) filter.amount.$lte = Number(maxAmount);
+  }
+
+  if (search) {
+    filter.$or = [
+      { notes: { $regex: search, $options: "i" } },
+      { category: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  if (createdBy && isValidId(createdBy)) filter.createdBy = createdBy;
+
+  const validSortFields = ["date", "amount", "createdAt"];
+  const sortField = validSortFields.includes(sortBy) ? sortBy : "date";
+  const sortDirection = sortOrder === "asc" ? 1 : -1;
+
   const skip = (Number(page) - 1) * Number(limit);
 
   const [records, total] = await Promise.all([
     Finance.find(filter)
       .populate("createdBy", "name email")
-      .sort({ date: -1 })
+      .sort({ [sortField]: sortDirection })
       .skip(skip)
       .limit(Number(limit)),
     Finance.countDocuments(filter),
   ]);
 
-  console.log(`getAllRecords: returned ${records.length} of ${total} records`);
+  console.log(`getAllRecords: returned ${records.length} of ${total} records | sort: ${sortField} ${sortOrder}`);
 
   return sendSuccess(res, {
     records,

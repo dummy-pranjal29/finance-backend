@@ -43,10 +43,9 @@ const financeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-financeSchema.pre(/^find/, function (next) {
-  if (this.getOptions().includeDeleted) return next();
+financeSchema.pre(/^find/, function () {
+  if (this.getOptions().includeDeleted) return;
   this.where({ isDeleted: false });
-  next();
 });
 
 module.exports = mongoose.model("Finance", financeSchema);

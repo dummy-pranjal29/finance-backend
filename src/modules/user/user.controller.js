@@ -1,14 +1,13 @@
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("./user.model");
 const { sendSuccess, sendError } = require("../../utils/response");
 
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 exports.createUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-
-    if (!name || !email || !password) {
-      return sendError(res, "name, email, and password are required", 400);
-    }
 
     const existing = await User.findOne({ email });
     if (existing) {
@@ -16,10 +15,9 @@ exports.createUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const user = await User.create({ name, email, password: hashedPassword, role });
 
-    console.log(`User created: ${user.email} | role: ${user.role}`);
+    console.log(`createUser: ${user.email} | role: ${user.role}`);
 
     const userObj = user.toObject();
     delete userObj.password;
@@ -51,6 +49,8 @@ exports.getAllUsers = async (req, res) => {
 
 exports.getUserById = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
+
     const user = await User.findById(req.params.id).select("-password");
 
     if (!user) {
@@ -68,12 +68,9 @@ exports.getUserById = async (req, res) => {
 
 exports.updateUserRole = async (req, res) => {
   try {
-    const { role } = req.body;
-    const validRoles = ["viewer", "analyst", "admin"];
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
 
-    if (!role || !validRoles.includes(role)) {
-      return sendError(res, "Invalid role. Must be viewer, analyst, or admin", 400);
-    }
+    const { role } = req.body;
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -96,11 +93,9 @@ exports.updateUserRole = async (req, res) => {
 
 exports.updateUserStatus = async (req, res) => {
   try {
-    const { isActive } = req.body;
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
 
-    if (typeof isActive !== "boolean") {
-      return sendError(res, "isActive must be a boolean", 400);
-    }
+    const { isActive } = req.body;
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -123,6 +118,8 @@ exports.updateUserStatus = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid user ID format", 400);
+
     const user = await User.findByIdAndDelete(req.params.id);
 
     if (!user) {

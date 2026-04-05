@@ -2,11 +2,12 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../user/user.model");
 const { sendSuccess, sendError } = require("../../utils/response");
+const config = require("../../config/index");
 
 const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
+    config.jwtSecret,
     { expiresIn: "7d" }
   );
 };

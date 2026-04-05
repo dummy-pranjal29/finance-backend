@@ -1,5 +1,8 @@
+const mongoose = require("mongoose");
 const Finance = require("./finance.model");
 const { sendSuccess, sendError } = require("../../utils/response");
+
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 exports.createRecord = async (req, res) => {
   try {
@@ -75,6 +78,8 @@ exports.getAllRecords = async (req, res) => {
 
 exports.getRecordById = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
+
     const record = await Finance.findById(req.params.id).populate("createdBy", "name email");
 
     if (!record) {
@@ -86,12 +91,15 @@ exports.getRecordById = async (req, res) => {
     return sendSuccess(res, record, "Record fetched successfully");
   } catch (error) {
     console.error(`getRecordById error: ${error.message}`);
+    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
     return sendError(res, "Failed to fetch record");
   }
 };
 
 exports.updateRecord = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
+
     const { amount, type, category, date, notes } = req.body;
 
     if (amount !== undefined && amount <= 0) {
@@ -113,12 +121,15 @@ exports.updateRecord = async (req, res) => {
     return sendSuccess(res, record, "Record updated successfully");
   } catch (error) {
     console.error(`updateRecord error: ${error.message}`);
+    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
     return sendError(res, "Failed to update record");
   }
 };
 
 exports.deleteRecord = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return sendError(res, "Invalid record ID format", 400);
+
     const record = await Finance.findByIdAndDelete(req.params.id);
 
     if (!record) {
@@ -130,6 +141,7 @@ exports.deleteRecord = async (req, res) => {
     return sendSuccess(res, null, "Record deleted successfully");
   } catch (error) {
     console.error(`deleteRecord error: ${error.message}`);
+    if (error.name === "CastError") return sendError(res, "Invalid record ID format", 400);
     return sendError(res, "Failed to delete record");
   }
 };

@@ -18,4 +18,25 @@ app.use("/api/users", userRoutes);
 app.use("/api/finance", financeRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
+app.use((_req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
+});
+
+app.use((err, _req, res, _next) => {
+  console.error(`Global error: ${err.message}`);
+
+  if (err.name === "CastError") {
+    return res.status(400).json({ success: false, message: "Invalid ID format" });
+  }
+
+  if (err.code === 11000) {
+    return res.status(409).json({ success: false, message: "Duplicate entry. Resource already exists." });
+  }
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
+});
+
 module.exports = app;

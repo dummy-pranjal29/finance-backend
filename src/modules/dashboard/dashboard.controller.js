@@ -1,22 +1,59 @@
+const mongoose = require("mongoose");
 const Finance = require("../finance/finance.model");
 const { sendSuccess } = require("../../utils/response");
+const AppError = require("../../utils/AppError");
 const asyncHandler = require("../../utils/asyncHandler");
 
-exports.getSummary = asyncHandler(async (_req, res) => {
+const buildFilter = (query, requestingUser) => {
+  const { startDate, endDate, userId } = query;
+  const filter = {};
+
+  if (userId) {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new AppError("Invalid userId format", 400);
+    }
+    if (requestingUser.role === "viewer" && userId !== requestingUser.id) {
+      throw new AppError("Viewers can only access their own data", 403);
+    }
+    filter.createdBy = new mongoose.Types.ObjectId(userId);
+  } else if (requestingUser.role === "viewer") {
+    filter.createdBy = new mongoose.Types.ObjectId(requestingUser.id);
+  }
+
+  if (startDate || endDate) {
+    filter.date = {};
+    if (startDate) filter.date.$gte = new Date(startDate);
+    if (endDate) filter.date.$lte = new Date(endDate);
+  }
+
+  return filter;
+};
+
+exports.getSummary = asyncHandler(async (req, res) => {
+  const filter = buildFilter(req.query, req.user);
+
   const result = await Finance.aggregate([
+    { $match: { ...filter, isDeleted: false } },
     {
       $group: {
         _id: "$type",
         total: { $sum: "$amount" },
+        count: { $sum: 1 },
       },
     },
   ]);
 
-  const summary = { totalIncome: 0, totalExpenses: 0, netBalance: 0 };
+  const summary = { totalIncome: 0, totalExpenses: 0, netBalance: 0, incomeCount: 0, expenseCount: 0 };
 
   result.forEach((item) => {
-    if (item._id === "income") summary.totalIncome = item.total;
-    if (item._id === "expense") summary.totalExpenses = item.total;
+    if (item._id === "income") {
+      summary.totalIncome = item.total;
+      summary.incomeCount = item.count;
+    }
+    if (item._id === "expense") {
+      summary.totalExpenses = item.total;
+      summary.expenseCount = item.count;
+    }
   });
 
   summary.netBalance = summary.totalIncome - summary.totalExpenses;
@@ -28,10 +65,13 @@ exports.getSummary = asyncHandler(async (_req, res) => {
 
 exports.getCategoryTotals = asyncHandler(async (req, res) => {
   const { type } = req.query;
-  const match = type ? { type } : {};
+  const filter = buildFilter(req.query, req.user);
+
+  if (type) filter.type = type;
+  filter.isDeleted = false;
 
   const result = await Finance.aggregate([
-    { $match: match },
+    { $match: filter },
     {
       $group: {
         _id: { category: "$category", type: "$type" },
@@ -54,8 +94,12 @@ exports.getCategoryTotals = asyncHandler(async (req, res) => {
   return sendSuccess(res, formatted, "Category totals fetched successfully");
 });
 
-exports.getTrends = asyncHandler(async (_req, res) => {
+exports.getTrends = asyncHandler(async (req, res) => {
+  const filter = buildFilter(req.query, req.user);
+  filter.isDeleted = false;
+
   const result = await Finance.aggregate([
+    { $match: filter },
     {
       $group: {
         _id: {
@@ -90,11 +134,15 @@ exports.getTrends = asyncHandler(async (_req, res) => {
   return sendSuccess(res, trends, "Trends fetched successfully");
 });
 
-exports.getRecentActivity = asyncHandler(async (_req, res) => {
-  const records = await Finance.find()
+exports.getRecentActivity = asyncHandler(async (req, res) => {
+  const { limit = 5 } = req.query;
+  const filter = buildFilter(req.query, req.user);
+  filter.isDeleted = false;
+
+  const records = await Finance.find(filter)
     .populate("createdBy", "name email")
     .sort({ createdAt: -1 })
-    .limit(5);
+    .limit(Number(limit));
 
   console.log(`getRecentActivity: returned ${records.length} recent records`);
 

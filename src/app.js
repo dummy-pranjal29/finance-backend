@@ -1,11 +1,19 @@
 const express = require("express");
+const helmet = require("helmet");
+const cors = require("cors");
+const morgan = require("morgan");
+const config = require("./config/index");
 const userRoutes = require("./modules/user/user.routes");
 const authRoutes = require("./modules/auth/auth.routes");
 const financeRoutes = require("./modules/finance/finance.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
+const { authRateLimiter } = require("./middlewares/rateLimiter.middleware");
 
 const app = express();
 
+app.use(helmet());
+app.use(cors({ origin: config.corsOrigin }));
+app.use(morgan("dev"));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
@@ -13,7 +21,7 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", message: "Finance API is running" });
 });
 
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRateLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/finance", financeRoutes);
 app.use("/api/dashboard", dashboardRoutes);

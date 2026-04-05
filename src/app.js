@@ -9,6 +9,7 @@ const financeRoutes = require("./modules/finance/finance.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
 const auditRoutes = require("./modules/audit/audit.routes");
 const profileRoutes = require("./modules/profile/profile.routes");
+const budgetRoutes = require("./modules/budget/budget.routes");
 const { authRateLimiter } = require("./middlewares/rateLimiter.middleware");
 
 const app = express();
@@ -29,6 +30,7 @@ app.use("/api/finance", financeRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/budgets", budgetRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });

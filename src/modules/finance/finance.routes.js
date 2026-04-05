@@ -6,6 +6,7 @@ const {
   getRecordById,
   updateRecord,
   deleteRecord,
+  restoreRecord,
 } = require("./finance.controller");
 const { authenticate } = require("../../middlewares/auth.middleware");
 const { authorize } = require("../../middlewares/rbac.middleware");
@@ -17,5 +18,6 @@ router.get("/", authenticate, authorize("admin", "analyst", "viewer"), getAllRec
 router.get("/:id", authenticate, authorize("admin", "analyst", "viewer"), getRecordById);
 router.put("/:id", authenticate, authorize("admin", "analyst"), updateRecordValidator, validate, updateRecord);
 router.delete("/:id", authenticate, authorize("admin"), deleteRecord);
+router.patch("/:id/restore", authenticate, authorize("admin"), restoreRecord);
 
 module.exports = router;

@@ -31,8 +31,22 @@ const financeSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
+
+financeSchema.pre(/^find/, function (next) {
+  if (this.getOptions().includeDeleted) return next();
+  this.where({ isDeleted: false });
+  next();
+});
 
 module.exports = mongoose.model("Finance", financeSchema);

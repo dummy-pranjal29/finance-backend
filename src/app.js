@@ -7,6 +7,7 @@ const userRoutes = require("./modules/user/user.routes");
 const authRoutes = require("./modules/auth/auth.routes");
 const financeRoutes = require("./modules/finance/finance.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
+const auditRoutes = require("./modules/audit/audit.routes");
 const { authRateLimiter } = require("./middlewares/rateLimiter.middleware");
 
 const app = express();
@@ -25,6 +26,7 @@ app.use("/api/auth", authRateLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/finance", financeRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/audit", auditRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
